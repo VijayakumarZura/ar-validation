@@ -1,0 +1,17 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ar-validation-configmap
+  namespace: ar-sandbox
+data:
+  server.port: "8084"
+  server.servlet.context-path: /ar-rules
+  spring.data.mongodb.uri: "mongodb://10.0.3.68:27017/ar-sandbox"
+  spring.main.allow-circular-references: "true"
+  spring.application.name: ar-rules
+  spring.security.oauth2.resourceserver.jwt.issuer-uri: https://ar-sandbox-login.zura-ai.in/realms/timesheet-management
+  api.emailReplyUrl: https://ar-sandbox.zura-ai.in/mail-stream/emailReplyOrForward
+  api.splitIntoDayWiseApi: https://ar-sandbox.zura-ai.in/time-forge/splitCentralizedJsonIntoDayWise?centralizedJsonId=
+  app.timezone: America/New_York
+  spring.profiles.active: qa

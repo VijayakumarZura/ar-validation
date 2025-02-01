@@ -1,0 +1,34 @@
+---
+apiVersion: apps/v1
+kind: Deployment 
+metadata:
+  name: ar-validation
+  namespace: ar-sandbox
+spec:
+  selector:
+    matchLabels:
+      app: ar-validation
+      replica: blue
+  replicas: 1 
+  template:
+    metadata:
+      labels:
+        app: ar-validation
+        replica: blue
+    spec:
+      containers:
+        - name: ar-validation
+          image: 147214052833.dkr.ecr.us-east-1.amazonaws.com/ar-sandbox-repo:ar-validation_20250123_qa_v1.0.10   
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: ar-validation-configmap
+          ports:
+            - containerPort: 8084
+          resources:           
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+            requests:
+              cpu: "100m"
+              memory: "200Mi"

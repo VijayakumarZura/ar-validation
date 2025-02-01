@@ -1,0 +1,24 @@
+server:
+  port: 8084
+  servlet:
+    context-path: /ar-rules
+spring:
+  main:
+    allow-circular-references: true
+  application:
+   name: ar-rules
+  data:
+      mongodb:
+        #user: test
+        #password: passwordvalue
+        uri: mongodb://localhost:27017/timesheetvault
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://192.168.0.16:8090/realms/timesheet-management
+app:
+  timezone: America/New_York
+api:
+  emailReplyUrl: http://192.168.0.16/mail-stream/emailReplyOrForward
+  splitIntoDayWiseApi: http://192.168.0.16/time-forge/splitCentralizedJsonIntoDayWise?centralizedJsonId=

@@ -1,0 +1,23 @@
+server:
+  port: 8084
+  servlet:
+    context-path: /ar-rules
+spring:
+  main:
+    allow-circular-references: true
+  application:
+   name: ar-rules
+  data:
+      mongodb:
+        #user: test
+        #password: passwordvalue
+        uri: mongodb://localhost:27017/timesheetvault
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://login.zura-ai.com/realms/timesheet-management
+app:
+  timezone: America/New_York
+api:
+  emailReplyUrl: https://ar-dashboard.zura-ai.com/mail-stream/emailReplyOrForward
