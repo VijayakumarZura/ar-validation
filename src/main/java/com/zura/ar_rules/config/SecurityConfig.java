@@ -24,9 +24,4 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /*
-    @Bean
-    public WebSecurityCustomizer webSecurityCustomizer() {
-        return (web) -> web.ignoring().antMatchers("/swagger-ui/index.html/**").antMatchers(new String[]{"/swagger-resources/**"}).antMatchers(new String[]{"/v2/api-docs"}).antMatchers("/webjars/**");
-    } */
 }
