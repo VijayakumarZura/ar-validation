@@ -25,7 +25,7 @@ jobs:
         with:
           projectBaseDir: .
           args: -Dsonar.organization=VijayakumarZura
-            -Dsonar.projectKey=VijayakumarZura_ar-validation_AZTAG-LEgEE8LoRPl1gA
+            -Dsonar.projectKey=VijayakumarZura_ar-validation_216398f6-def3-4a12-b1fc-5d2bd6a32626
             -Dsonar.java.binaries=build/classes
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
