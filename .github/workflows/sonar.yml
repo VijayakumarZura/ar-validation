@@ -3,7 +3,7 @@ name: CI/CD workflow for Gradle Build, Sonar Code scan and Quality gate check
 on:
   push:
     branches:
-      - main
+      - qa
   workflow_dispatch: null
 jobs:
   build:
