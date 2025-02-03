@@ -91,7 +91,7 @@ jobs:
                 "subject": "GitHub Action Notification - SonarQube Result",
                 "body": {
                   "contentType": "Text",
-                  "content": "The GitHub Action workflow has completed. Build status: '"$GRADLE_BUILD_STATUS"'. SonarQube status: '"$STATUS"'."
+                  "content": "The GitHub Action workflow has completed. \n\nBuild status: '"$GRADLE_BUILD_STATUS"'. \n\nSonarQube status: '"$STATUS"'"
                 },
                 "toRecipients": ['"$RECIPIENTS_JSON"']
               }
