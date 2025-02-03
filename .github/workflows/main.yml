@@ -1,10 +1,11 @@
----
 name: CI/CD workflow for Gradle Build and Sonar Code scan
+
 on:
   push:
     branches:
       - main
   workflow_dispatch: null
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,15 +14,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+
       - name: Set up JDK 11
         uses: actions/setup-java@v2
         with:
           distribution: adopt
           java-version: "11"
+
       - name: Build with Gradle
         run: |
           chmod +x ./gradlew
           ./gradlew build --scan
+
       - name: SonarQube scan
         uses: sonarsource/sonarqube-scan-action@master
         with:
@@ -33,6 +37,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
       - name: SonarQube Quality Gate check
         id: sonarqube-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@master
@@ -41,37 +46,34 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         if: always()
-      - name: Print SonarQube Quality Gate Status
-        run: echo "The Quality Gate status is ${{
-          steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}."
-  send_email_notification:
-    needs: build
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
+
       - name: Fetch SonarQube Report
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: >
+        id: sonar-report
+        run: |
           SONAR_PROJECT_KEY="VijayakumarZura_ar-validation_2a6bb681-8355-4fe8-b8d3-d475ac402b1c"
+          SONAR_HOST="${{ secrets.SONAR_HOST_URL }}"
+          SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}"
           
-          curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" -o sonar_report.json
+          # Fetch SonarQube Metrics
+          REPORT=$(curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST/api/measures/component?component=$SONAR_PROJECT_KEY&metricKeys=bugs,vulnerabilities,code_smells,blocker_violations,critical_violations,major_violations,minor_violations")
+          
+          BLOCKER_COUNT=$(echo $REPORT | jq -r '.component.measures[] | select(.metric=="blocker_violations") | .value')
+          CRITICAL_COUNT=$(echo $REPORT | jq -r '.component.measures[] | select(.metric=="critical_violations") | .value')
+          MAJOR_COUNT=$(echo $REPORT | jq -r '.component.measures[] | select(.metric=="major_violations") | .value')
+          MINOR_COUNT=$(echo $REPORT | jq -r '.component.measures[] | select(.metric=="minor_violations") | .value')
+          CODE_SMELLS=$(echo $REPORT | jq -r '.component.measures[] | select(.metric=="code_smells") | .value')
 
-          QUALITY_STATUS=$(jq -r '.projectStatus.status' < sonar_report.json)
-          BLOCKER_COUNT=$(jq -r '.projectStatus.conditions[] | select(.metricKey=="blocker_violations") | .actualValue' < sonar_report.json)
-          CRITICAL_COUNT=$(jq -r '.projectStatus.conditions[] | select(.metricKey=="critical_violations") | .actualValue' < sonar_report.json)
-          MAJOR_COUNT=$(jq -r '.projectStatus.conditions[] | select(.metricKey=="major_violations") | .actualValue' < sonar_report.json)
-          MINOR_COUNT=$(jq -r '.projectStatus.conditions[] | select(.metricKey=="minor_violations") | .actualValue' < sonar_report.json)
-          CODE_SMELLS=$(jq -r '.projectStatus.conditions[] | select(.metricKey=="code_smells") | .actualValue' < sonar_report.json)
-
-          echo "QUALITY_STATUS=$QUALITY_STATUS" >> $GITHUB_ENV
           echo "BLOCKER_COUNT=$BLOCKER_COUNT" >> $GITHUB_ENV
           echo "CRITICAL_COUNT=$CRITICAL_COUNT" >> $GITHUB_ENV
           echo "MAJOR_COUNT=$MAJOR_COUNT" >> $GITHUB_ENV
           echo "MINOR_COUNT=$MINOR_COUNT" >> $GITHUB_ENV
           echo "CODE_SMELLS=$CODE_SMELLS" >> $GITHUB_ENV
 
+  send_email_notification:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
       - name: Send email via Microsoft Graph
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -79,7 +81,8 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           EMAIL_RECIPIENTS: vari@zuralabs.com
           EMAIL_FROM: vari@zuralabs.com
-        run: >
+        run: |
+          # Get Microsoft Graph Access Token
           curl -X POST "https://login.microsoftonline.com/$AZURE_TENANT_ID/oauth2/v2.0/token" \
             -F grant_type=client_credentials \
             -F client_id="$AZURE_CLIENT_ID" \
@@ -90,25 +93,28 @@ jobs:
           ACCESS_TOKEN=$(jq -r .access_token < token.json)
 
           GRADLE_BUILD_STATUS="${{ needs.build.result }}"
-          SONARQUBE_STATUS="${{ env.QUALITY_STATUS }}"
+          SONARQUBE_STATUS="${{ needs.build.outputs.sonar_status }}"
 
           echo "Build result: $GRADLE_BUILD_STATUS"
           echo "SonarQube result: $SONARQUBE_STATUS"
 
+          STATUS="The SonarQube analysis ${SONARQUBE_STATUS}."
+
+          # Prepare Email Content
           EMAIL_BODY="The GitHub Action workflow has completed.\n\n"
-          EMAIL_BODY+="Build status: $GRADLE_BUILD_STATUS\n\n"
-          EMAIL_BODY+="SonarQube Analysis Status: $SONARQUBE_STATUS\n\n"
+          EMAIL_BODY+="Build status: ${GRADLE_BUILD_STATUS}\n"
+          EMAIL_BODY+="SonarQube Quality Gate: ${SONARQUBE_STATUS}\n\n"
           EMAIL_BODY+="Detailed SonarQube Report:\n"
-          EMAIL_BODY+="🔴 Blocker Issues: ${{ env.BLOCKER_COUNT }}\n"
-          EMAIL_BODY+="🟠 Critical Issues: ${{ env.CRITICAL_COUNT }}\n"
-          EMAIL_BODY+="🟡 Major Issues: ${{ env.MAJOR_COUNT }}\n"
-          EMAIL_BODY+="🔵 Minor Issues: ${{ env.MINOR_COUNT }}\n"
-          EMAIL_BODY+="🟢 Code Smells: ${{ env.CODE_SMELLS }}\n"
-          EMAIL_BODY+="\nSonarQube Dashboard: ${{ secrets.SONAR_HOST_URL }}/dashboard?id=${{ secrets.SONAR_PROJECT_KEY }}"
+          EMAIL_BODY+="Blocker Issues: ${BLOCKER_COUNT}\n"
+          EMAIL_BODY+="Critical Issues: ${CRITICAL_COUNT}\n"
+          EMAIL_BODY+="Major Issues: ${MAJOR_COUNT}\n"
+          EMAIL_BODY+="Minor Issues: ${MINOR_COUNT}\n"
+          EMAIL_BODY+="Code Smells: ${CODE_SMELLS}\n"
 
-          IFS=',' read -ra RECIPIENTS <<< "$EMAIL_RECIPIENTS"
-          RECIPIENTS_JSON=$(for email in "${RECIPIENTS[@]}"; do printf '{"emailAddress": {"address": "%s"}},' "$email"; done | sed 's/,$//')
+          # Convert recipient list
+          RECIPIENTS_JSON=$(echo "[{\"emailAddress\": {\"address\": \"$EMAIL_RECIPIENTS\"}}]")
 
+          # Send Email
           curl -X POST "https://graph.microsoft.com/v1.0/users/$EMAIL_FROM/sendMail" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
@@ -119,7 +125,6 @@ jobs:
                   "contentType": "Text",
                   "content": "'"$EMAIL_BODY"'"
                 },
-                "toRecipients": ['"$RECIPIENTS_JSON"']
+                "toRecipients": '"$RECIPIENTS_JSON"'
               }
             }'
-
