@@ -41,7 +41,7 @@ jobs:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          EMAIL_RECIPIENTS: nkasaragadda@zuralabs.com,vari@zuralabs.com,aushaik@zuralabs.com
+          EMAIL_RECIPIENTS: vari@zuralabs.com
           EMAIL_FROM: vari@zuralabs.com
         run: >
           curl -X POST
@@ -73,10 +73,10 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{
               "message": {
-                "subject": "GitHub Action Notification SonarQube result",
+                "subject": "GitHub Action Notification SonarQube Result",
                 "body": {
                   "contentType": "Text",
-                  "content": "The GitHub Action PROD workflow has '"${STATUS}"'. "
+                  "content": "The GitHub Action PROD workflow has '"${STATUS}"'."
                 },
                 "toRecipients": ['"$RECIPIENTS_JSON"']
                     }
