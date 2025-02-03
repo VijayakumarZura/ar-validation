@@ -65,9 +65,9 @@ jobs:
           ACCESS_TOKEN=$(jq -r .access_token < token.json)
 
           GRADLE_BUILD_STATUS="${{ needs.Gradle_Build.result }}"
-          SONARQUBE_STATUS="${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
-
           echo "Build Result: $GRADLE_BUILD_STATUS"
+          
+          SONARQUBE_STATUS="${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
           echo "SonarQube Result: $SONARQUBE_STATUS"
 
           if [[ "$GRADLE_BUILD_STATUS" == "success" && "$SONARQUBE_STATUS" == "OK" ]]; then
