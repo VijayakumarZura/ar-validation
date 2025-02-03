@@ -41,7 +41,7 @@ jobs:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          EMAIL_RECIPIENTS: aushaik@zuralabs.com
+          EMAIL_RECIPIENTS: vari@zuralabs.com, aushaik@zuralabs.com
           EMAIL_FROM: vari@zuralabs.com
         run: >
           curl -X POST
