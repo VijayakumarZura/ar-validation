@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      sonar_status: ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -43,12 +45,9 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
+        if: always()
       - name: Print SonarQube Quality Gate Status
-        run: echo "The Quality Gate status is ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}."
-      
-      - name: Store Quality Gate status
-        run: echo "Quality_Gate_Status=${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}." >> $GITHUB_ENV
+        run: echo "The Quality Gate status is ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
   send_email_notification:
     needs: build
     runs-on: ubuntu-latest
@@ -73,7 +72,7 @@ jobs:
           ACCESS_TOKEN=$(jq -r .access_token < token.json)
 
           GRADLE_BUILD_STATUS="${{ needs.build.result }}."
-          SONARQUBE_STATUS="${{ env.Quality_Gate_Status }}."
+          SONARQUBE_STATUS="${{ needs.build.outputs.sonar_status }}."
 
           echo "Build result: $GRADLE_BUILD_STATUS"
           echo "SonarQube result: $SONARQUBE_STATUS"
