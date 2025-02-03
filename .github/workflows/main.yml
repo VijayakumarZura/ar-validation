@@ -4,32 +4,38 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: null
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+
       - name: Set up JDK 11
         uses: actions/setup-java@v2
         with:
           distribution: adopt
           java-version: "11"
+
       - name: Build with Gradle
         run: |
           chmod +x ./gradlew
           ./gradlew build --scan
+
       - name: SonarQube scan
         uses: sonarsource/sonarqube-scan-action@master
         with:
           projectBaseDir: .
-          args: -Dsonar.organization=VijayakumarZura
+          args: >
+            -Dsonar.organization=VijayakumarZura
             -Dsonar.projectKey=VijayakumarZura_ar-validation_2a6bb681-8355-4fe8-b8d3-d475ac402b1c
             -Dsonar.java.binaries=build/classes
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
       - name: SonarQube Quality Gate check
         id: sonarqube-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@master
@@ -37,12 +43,12 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      - name: Here is SonarQube Quality Gate Status value...
-        run: echo "The Quality Gate status is ${{
-          steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
+
+      - name: Print SonarQube Quality Gate Status
+        run: echo "The Quality Gate status is ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
+
   send_email_notification:
-    needs:
-      - build
+    needs: build
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -53,15 +59,15 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           EMAIL_RECIPIENTS: vari@zuralabs.com
           EMAIL_FROM: vari@zuralabs.com
-        run: >
-          curl -X POST
-          https://login.microsoftonline.com/$AZURE_TENANT_ID/oauth2/v2.0/token \
+        run: |
+          # Obtain Microsoft Graph API token
+          curl -X POST "https://login.microsoftonline.com/$AZURE_TENANT_ID/oauth2/v2.0/token" \
             -F grant_type=client_credentials \
-            -F client_id=$AZURE_CLIENT_ID \
-            -F client_secret=$AZURE_CLIENT_SECRET \
-            -F scope=https://graph.microsoft.com/.default \
+            -F client_id="$AZURE_CLIENT_ID" \
+            -F client_secret="$AZURE_CLIENT_SECRET" \
+            -F scope="https://graph.microsoft.com/.default" \
             -o token.json
-            
+
           ACCESS_TOKEN=$(jq -r .access_token < token.json)
 
           GRADLE_BUILD_STATUS="${{ needs.build.result }}"
@@ -69,29 +75,26 @@ jobs:
 
           echo "Build result: $GRADLE_BUILD_STATUS"
           echo "SonarQube result: $SONARQUBE_STATUS"
-          
-          GRADLE_BUILD_STATUS="${{ needs.build.result }}"
-          echo "build: $GRADLE_BUILD_STATUS"
+
           if [[ "$GRADLE_BUILD_STATUS" == "success" && "$SONARQUBE_STATUS" == "OK" ]]; then
             STATUS="The SonarQube analysis passed successfully."
           else
-            STATUS="The SonarQube analysis failed or quality gate not passed."
+            STATUS="The SonarQube analysis failed or the quality gate was not passed."
           fi
+
           IFS=',' read -ra RECIPIENTS <<< "$EMAIL_RECIPIENTS"
           RECIPIENTS_JSON=$(for email in "${RECIPIENTS[@]}"; do printf '{"emailAddress": {"address": "%s"}},' "$email"; done | sed 's/,$//')
-          curl -X POST https://graph.microsoft.com/v1.0/users/$EMAIL_FROM/sendMail \
+
+          curl -X POST "https://graph.microsoft.com/v1.0/users/$EMAIL_FROM/sendMail" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{
               "message": {
-                "subject": "GitHub Action Notification SonarQube Result",
+                "subject": "GitHub Action Notification - SonarQube Result",
                 "body": {
                   "contentType": "Text",
-                  "content": "The GitHub Action workflow has completed. Build status: '"${GRADLE_BUILD_STATUS}"'. SonarQube status: '"${STATUS}"'"
+                  "content": "The GitHub Action workflow has completed. Build status: '"$GRADLE_BUILD_STATUS"'. SonarQube status: '"$STATUS"'."
                 },
                 "toRecipients": ['"$RECIPIENTS_JSON"']
-                    }
-                  }
-                ]
               }
             }'
