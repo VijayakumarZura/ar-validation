@@ -3,7 +3,7 @@ name: CI/CD workflow for Gradle Build and Sonar Code scan
 on:
   push:
     branches:
-      - main
+      - qa
   workflow_dispatch: null
 jobs:
   build:
@@ -30,3 +30,57 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  send_email_notification:
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send email via Microsoft Graph
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          EMAIL_RECIPIENTS: aushaik@zuralabs.com
+          EMAIL_FROM: vari@zuralabs.com
+        run: >
+          curl -X POST
+          https://login.microsoftonline.com/$AZURE_TENANT_ID/oauth2/v2.0/token \
+            -F grant_type=client_credentials \
+            -F client_id=$AZURE_CLIENT_ID \
+            -F client_secret=$AZURE_CLIENT_SECRET \
+            -F scope=https://graph.microsoft.com/.default \
+            -o token.json
+
+          ACCESS_TOKEN=$(jq -r .access_token < token.json)
+
+          GRADLE_BUILD_STATUS="${{ needs.build.result }}"
+
+          echo "build: $GRADLE_BUILD_STATUS"
+
+          if [[ "$GRADLE_BUILD_STATUS" == "success" ]]; then
+            STATUS="the SonarQube result succeeded"
+          else
+            STATUS="the SonarQube result failed"
+          fi
+
+          IFS=',' read -ra RECIPIENTS <<< "$EMAIL_RECIPIENTS"
+
+          RECIPIENTS_JSON=$(for email in "${RECIPIENTS[@]}"; do printf '{"emailAddress": {"address": "%s"}},' "$email"; done | sed 's/,$//')
+
+          curl -X POST https://graph.microsoft.com/v1.0/users/$EMAIL_FROM/sendMail \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "message": {
+                "subject": "GitHub Action Notification SonarQube result",
+                "body": {
+                  "contentType": "Text",
+                  "content": "The GitHub Action PROD workflow has '"${STATUS}"'. "
+                },
+                "toRecipients": ['"$RECIPIENTS_JSON"']
+                    }
+                  }
+                ]
+              }
+            }'
