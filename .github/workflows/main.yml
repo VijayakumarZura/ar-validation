@@ -34,6 +34,13 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      - name: Extract SonarQube Analysis ID
+        id: extract-analysis-id
+        run: |
+          # Extract the analysis ID from the SonarQube scan logs
+          ANALYSIS_ID=$(grep -oP 'ANALYSIS_ID=\K[0-9a-fA-F\-]+' <<< "$(cat $GITHUB_STEP_SUMMARY)")
+          echo "Extracted ANALYSIS_ID: $ANALYSIS_ID"
+          echo "sonar_analysis_id=$ANALYSIS_ID" >> $GITHUB_OUTPUT
       - name: SonarQube Quality Gate check
         id: sonarqube-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@master
@@ -57,6 +64,7 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
           ANALYSIS_ID=${{ needs.build.outputs.sonar_analysis_id }}
+          echo "Fetching SonarQube results for ANALYSIS_ID: $ANALYSIS_ID"
           curl -u $SONAR_TOKEN: -s "$SONAR_HOST_URL/api/qualitygates/project_status?analysisId=$ANALYSIS_ID" -o sonar_results.json
           SONAR_RESULTS=$(jq -r .projectStatus.status < sonar_results.json)
           echo "SonarQube Results: $SONAR_RESULTS"
