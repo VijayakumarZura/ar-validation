@@ -1,12 +1,13 @@
----
 name: CI/CD workflow for Gradle Build and Sonar Code scan
+
 on:
   push:
     branches:
       - main
   workflow_dispatch: null
+
 jobs:
-  Gradle_Build:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -37,12 +38,18 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      - name: Retrieve SonarQube Issues
+        id: retrieve-sonarqube-issues
+        run: |
+          curl -u ${{ secrets.SONAR_TOKEN }} "$SONAR_HOST_URL/api/issues/search?componentKeys=VijayakumarZura_ar-validation_2a6bb681-8355-4fe8-b8d3-d475ac402b1c" -o issues.json
+          echo "SonarQube issues fetched: $(jq .total .issues.json)"
       - name: Here is SonarQube Quality Gate Status value...
         run: echo "The Quality Gate status is ${{
           steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
-  Send_Email_Notification:
+
+  send_email_notification:
     needs:
-      - Gradle_Build
+      - build
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -53,33 +60,41 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           EMAIL_RECIPIENTS: vari@zuralabs.com
           EMAIL_FROM: vari@zuralabs.com
-        run: >
-          curl -X POST
-          https://login.microsoftonline.com/$AZURE_TENANT_ID/oauth2/v2.0/token \
+        run: |
+          # Get the access token from Azure
+          curl -X POST https://login.microsoftonline.com/$AZURE_TENANT_ID/oauth2/v2.0/token \
             -F grant_type=client_credentials \
             -F client_id=$AZURE_CLIENT_ID \
             -F client_secret=$AZURE_CLIENT_SECRET \
             -F scope=https://graph.microsoft.com/.default \
             -o token.json
-
           ACCESS_TOKEN=$(jq -r .access_token < token.json)
 
-          GRADLE_BUILD_STATUS="${{ needs.Gradle_Build.result }}"
-          echo "Build Result: $GRADLE_BUILD_STATUS"
-          
+          # Get the result of the build job
+          GRADLE_BUILD_STATUS="${{ needs.build.result }}"
           SONARQUBE_STATUS="${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
-          echo "SonarQube Result: $SONARQUBE_STATUS"
+          SONARQUBE_ISSUES=$(cat issues.json)
 
+          echo "Build result: $GRADLE_BUILD_STATUS"
+          echo "SonarQube result: $SONARQUBE_STATUS"
+          echo "SonarQube issues: $SONARQUBE_ISSUES"
+
+          # Define the email subject and content based on SonarQube status
           if [[ "$GRADLE_BUILD_STATUS" == "success" && "$SONARQUBE_STATUS" == "OK" ]]; then
             STATUS="The SonarQube analysis passed successfully."
           else
             STATUS="The SonarQube analysis failed or quality gate not passed."
           fi
 
-          IFS=',' read -ra RECIPIENTS <<< "$EMAIL_RECIPIENTS"
+          # Prepare email body with SonarQube issues
+          ISSUES_BODY="Here are the issues found in SonarQube analysis:\n\n"
+          ISSUES_BODY+=$(jq -r '.issues[] | "- \(.message)\n" ' issues.json)
 
+          # Prepare email content
+          IFS=',' read -ra RECIPIENTS <<< "$EMAIL_RECIPIENTS"
           RECIPIENTS_JSON=$(for email in "${RECIPIENTS[@]}"; do printf '{"emailAddress": {"address": "%s"}},' "$email"; done | sed 's/,$//')
 
+          # Send email with SonarQube results and issues
           curl -X POST https://graph.microsoft.com/v1.0/users/$EMAIL_FROM/sendMail \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
@@ -88,11 +103,8 @@ jobs:
                 "subject": "GitHub Action Notification - SonarQube Result",
                 "body": {
                   "contentType": "Text",
-                  "content": "The GitHub Action workflow has completed. Build status: '"${GRADLE_BUILD_STATUS}"'. SonarQube status: '"${STATUS}"'"
+                  "content": "The GitHub Action workflow has completed. Build status: '"${GRADLE_BUILD_STATUS}"'. SonarQube status: '"${STATUS}"'.\n\n'"${ISSUES_BODY}"
                 },
                 "toRecipients": ['"$RECIPIENTS_JSON"']
-                    }
-                  }
-                ]
               }
             }'
