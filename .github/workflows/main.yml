@@ -49,6 +49,29 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     steps:
+      - name: Fetch SonarQube Report
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: >
+          SONAR_PROJECT_KEY="VijayakumarZura_ar-validation_2a6bb681-8355-4fe8-b8d3-d475ac402b1c"
+          
+          curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" -o sonar_report.json
+
+          QUALITY_STATUS=$(jq -r '.projectStatus.status' < sonar_report.json)
+          BLOCKER_COUNT=$(jq -r '.projectStatus.conditions[] | select(.metricKey=="blocker_violations") | .actualValue' < sonar_report.json)
+          CRITICAL_COUNT=$(jq -r '.projectStatus.conditions[] | select(.metricKey=="critical_violations") | .actualValue' < sonar_report.json)
+          MAJOR_COUNT=$(jq -r '.projectStatus.conditions[] | select(.metricKey=="major_violations") | .actualValue' < sonar_report.json)
+          MINOR_COUNT=$(jq -r '.projectStatus.conditions[] | select(.metricKey=="minor_violations") | .actualValue' < sonar_report.json)
+          CODE_SMELLS=$(jq -r '.projectStatus.conditions[] | select(.metricKey=="code_smells") | .actualValue' < sonar_report.json)
+
+          echo "QUALITY_STATUS=$QUALITY_STATUS" >> $GITHUB_ENV
+          echo "BLOCKER_COUNT=$BLOCKER_COUNT" >> $GITHUB_ENV
+          echo "CRITICAL_COUNT=$CRITICAL_COUNT" >> $GITHUB_ENV
+          echo "MAJOR_COUNT=$MAJOR_COUNT" >> $GITHUB_ENV
+          echo "MINOR_COUNT=$MINOR_COUNT" >> $GITHUB_ENV
+          echo "CODE_SMELLS=$CODE_SMELLS" >> $GITHUB_ENV
+
       - name: Send email via Microsoft Graph
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -67,20 +90,23 @@ jobs:
           ACCESS_TOKEN=$(jq -r .access_token < token.json)
 
           GRADLE_BUILD_STATUS="${{ needs.build.result }}"
-          SONARQUBE_STATUS="${{ needs.build.outputs.sonar_status }}"
+          SONARQUBE_STATUS="${{ env.QUALITY_STATUS }}"
 
           echo "Build result: $GRADLE_BUILD_STATUS"
-
           echo "SonarQube result: $SONARQUBE_STATUS"
 
-          if [[ "$GRADLE_BUILD_STATUS" == "success" && "$SONARQUBE_STATUS" == "PASSED" ]]; then
-            STATUS="The SonarQube analysis passed successfully."
-          else
-            STATUS="The SonarQube analysis failed or the quality gate was not passed."
-          fi
+          EMAIL_BODY="The GitHub Action workflow has completed.\n\n"
+          EMAIL_BODY+="Build status: $GRADLE_BUILD_STATUS\n\n"
+          EMAIL_BODY+="SonarQube Analysis Status: $SONARQUBE_STATUS\n\n"
+          EMAIL_BODY+="Detailed SonarQube Report:\n"
+          EMAIL_BODY+="🔴 Blocker Issues: ${{ env.BLOCKER_COUNT }}\n"
+          EMAIL_BODY+="🟠 Critical Issues: ${{ env.CRITICAL_COUNT }}\n"
+          EMAIL_BODY+="🟡 Major Issues: ${{ env.MAJOR_COUNT }}\n"
+          EMAIL_BODY+="🔵 Minor Issues: ${{ env.MINOR_COUNT }}\n"
+          EMAIL_BODY+="🟢 Code Smells: ${{ env.CODE_SMELLS }}\n"
+          EMAIL_BODY+="\nSonarQube Dashboard: ${{ secrets.SONAR_HOST_URL }}/dashboard?id=${{ secrets.SONAR_PROJECT_KEY }}"
 
           IFS=',' read -ra RECIPIENTS <<< "$EMAIL_RECIPIENTS"
-
           RECIPIENTS_JSON=$(for email in "${RECIPIENTS[@]}"; do printf '{"emailAddress": {"address": "%s"}},' "$email"; done | sed 's/,$//')
 
           curl -X POST "https://graph.microsoft.com/v1.0/users/$EMAIL_FROM/sendMail" \
@@ -88,11 +114,12 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{
               "message": {
-                "subject": "GitHub Action Notification - SonarQube Result",
+                "subject": "GitHub Action Notification - SonarQube Report",
                 "body": {
                   "contentType": "Text",
-                  "content": "The GitHub Action workflow has completed. \n\nBuild status: '"$GRADLE_BUILD_STATUS"'. \n\nSonarQube status: '"$STATUS"'"
+                  "content": "'"$EMAIL_BODY"'"
                 },
                 "toRecipients": ['"$RECIPIENTS_JSON"']
               }
             }'
+
