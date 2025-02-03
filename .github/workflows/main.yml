@@ -46,20 +46,14 @@ jobs:
 
       - name: Print SonarQube Quality Gate Status
         run: echo "The Quality Gate status is ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}."
-
+      
+      - name: Store Quality Gate status
+        run: echo "Quality_Gate_Status=${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}." >> $GITHUB_ENV
   send_email_notification:
     needs: build
     runs-on: ubuntu-latest
     if: always()
-    steps:
-      - name: SonarQube Quality Gate check
-        id: sonarqube-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-            
+    steps:      
       - name: Send email via Microsoft Graph
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -78,8 +72,8 @@ jobs:
 
           ACCESS_TOKEN=$(jq -r .access_token < token.json)
 
-          GRADLE_BUILD_STATUS="${{ needs.build.result }}"
-          SONARQUBE_STATUS="${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
+          GRADLE_BUILD_STATUS="${{ needs.build.result }}."
+          SONARQUBE_STATUS="${{ env.Quality_Gate_Status }}."
 
           echo "Build result: $GRADLE_BUILD_STATUS"
           echo "SonarQube result: $SONARQUBE_STATUS"
