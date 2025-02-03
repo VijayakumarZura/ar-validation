@@ -66,10 +66,11 @@ jobs:
 
           ACCESS_TOKEN=$(jq -r .access_token < token.json)
 
-          GRADLE_BUILD_STATUS="${{ needs.build.result }}."
-          SONARQUBE_STATUS="${{ needs.build.outputs.sonar_status }}."
+          GRADLE_BUILD_STATUS="${{ needs.build.result }}"
+          SONARQUBE_STATUS="${{ needs.build.outputs.sonar_status }}"
 
           echo "Build result: $GRADLE_BUILD_STATUS"
+
           echo "SonarQube result: $SONARQUBE_STATUS"
 
           if [[ "$GRADLE_BUILD_STATUS" == "success" && "$SONARQUBE_STATUS" == "PASSED" ]]; then
@@ -90,7 +91,7 @@ jobs:
                 "subject": "GitHub Action Notification - SonarQube Result",
                 "body": {
                   "contentType": "Text",
-                  "content": "The GitHub Action workflow has completed. Build status: '"$GRADLE_BUILD_STATUS"' SonarQube status: '"$STATUS"'"
+                  "content": "The GitHub Action workflow has completed. Build status: '"$GRADLE_BUILD_STATUS"'. SonarQube status: '"$STATUS"'."
                 },
                 "toRecipients": ['"$RECIPIENTS_JSON"']
               }
