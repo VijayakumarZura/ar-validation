@@ -38,11 +38,17 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      - name: Retrieve SonarQube Issues
-        id: retrieve-sonarqube-issues
+      - name: Fetch SonarQube Issues
         run: |
-          curl -u ${{ secrets.SONAR_TOKEN }} "$SONAR_HOST_URL/api/issues/search?componentKeys=VijayakumarZura_ar-validation_2a6bb681-8355-4fe8-b8d3-d475ac402b1c" -o issues.json
-          echo "SonarQube issues fetched: $(jq .total .issues.json)"
+          echo "Fetching SonarQube issues..."
+          curl -s -X GET "$SONAR_HOST_URL/api/issues/search?componentKeys=VijayakumarZura_ar-validation_2a6bb681-8355-4fe8-b8d3-d475ac402b1c" \
+            -H "Authorization: Bearer ${{ secrets.SONAR_TOKEN }}" \
+            -o issues.json
+          echo "SonarQube issues fetched: $(jq .total issues.json)"
+        env:
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
       - name: Here is SonarQube Quality Gate Status value...
         run: echo "The Quality Gate status is ${{
           steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
